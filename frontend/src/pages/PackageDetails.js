@@ -100,20 +100,9 @@ export default function PackageDetails() {
             }
 
             const response = await createInquiry(formData);
-            // const response = await createBooking({
-            //     packageId: id,
-            //     name: formState.name,
-            //     phone: formState.phone,
-            //     seatsBooked: selectedSeats,
-            // });
-
             setTravelPackage(response.package);
             setSelectedSeats([]);
             setSuccessState(response);
-
-            // if (response.whatsappUrl) {
-            //     window.open(response.whatsappUrl, "_blank", "noopener,noreferrer");
-            // }
         } catch (error) {
             setErrorMessage(getApiErrorMessage(error, "Booking could not be completed."));
 
@@ -183,8 +172,8 @@ export default function PackageDetails() {
             {errorMessage ? <div className="card helper-card helper-card--error">{errorMessage}</div> : null}
             {successState ? (
                 <div className="card helper-card helper-card--success">
-                    Booking successful for seats {successState.booking.seatsBooked.join(", ")}. WhatsApp has been
-                    opened with your pre-filled booking message.
+                    Booking successful for seats {successState.booking.seatsBooked.join(", ")}.
+                    Your payment proof and booking request are now under review.
                 </div>
             ) : null}
 

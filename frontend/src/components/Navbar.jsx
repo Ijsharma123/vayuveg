@@ -5,7 +5,6 @@ const navItems = [
     { to: "/", label: "Home" },
     { to: "/packages", label: "Packages" },
     { to: "/inquiry", label: "Inquiry" },
-    { to: "/admin", label: "Admin" },
 ];
 
 export default function Navbar() {

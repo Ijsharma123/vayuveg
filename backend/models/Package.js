@@ -46,6 +46,10 @@ const PackageSchema = new mongoose.Schema(
             type: [Number],
             default: [],
         },
+        pendingSeats: {
+            type: [Number],
+            default: [],
+        },
     },
     {
         timestamps: true,
@@ -53,18 +57,31 @@ const PackageSchema = new mongoose.Schema(
 );
 
 PackageSchema.pre("validate", function () {
-    const uniqueSeats = Array.from(
+    const uniqueBooked = Array.from(
         new Set(
             (this.bookedSeats || [])
                 .map((seat) => Number(seat))
                 .filter((seat) => Number.isInteger(seat) && seat > 0)
         )
-    ).sort((firstSeat, secondSeat) => firstSeat - secondSeat);
+    ).sort((a, b) => a - b);
 
-    this.bookedSeats = uniqueSeats;
+    const uniquePending = Array.from(
+        new Set(
+            (this.pendingSeats || [])
+                .map((seat) => Number(seat))
+                .filter((seat) => Number.isInteger(seat) && seat > 0)
+        )
+    ).sort((a, b) => a - b);
+
+    this.bookedSeats = uniqueBooked;
+    this.pendingSeats = uniquePending;
 
     if (typeof this.availableSeats !== "number") {
-        this.availableSeats = Math.max(this.totalSeats - uniqueSeats.length, 0);
+        this.availableSeats = Math.max(this.totalSeats - uniqueBooked.length - uniquePending.length, 0);
+    }
+
+    if (this.availableSeats < 0) {
+        this.availableSeats = 0;
     }
 
     // next();

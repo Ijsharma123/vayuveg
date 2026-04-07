@@ -4,6 +4,16 @@ const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL || "/api",
 });
 
+export function setAuthToken(token) {
+    if (token) {
+        api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    }
+}
+
+export function clearAuthToken() {
+    delete api.defaults.headers.common.Authorization;
+}
+
 export function getApiErrorMessage(error, fallbackMessage = "Something went wrong.") {
     return error?.response?.data?.message || fallbackMessage;
 }
@@ -19,12 +29,63 @@ export async function getPackageById(id) {
 }
 
 export async function createPackage(payload) {
-    const response = await api.post("/packages/add", payload);
+    const response = await api.post("/packages", payload);
     return response.data.data;
 }
 
-export async function createBooking(payload) {
-    const response = await api.post("/book", payload);
+export async function adminLogin(credentials) {
+    const response = await api.post("/admin/login", credentials);
+    return response.data.data;
+}
+
+export async function getBookings(status) {
+    const queryString = status ? `?status=${encodeURIComponent(status)}` : "";
+    const response = await api.get(`/bookings${queryString}`);
+    return response.data.data;
+}
+
+export async function updateBookingStatus(id, status) {
+    const response = await api.put(`/bookings/${id}/status`, { status });
+    return response.data.data;
+}
+
+export async function updateBooking(id, updates) {
+    const response = await api.put(`/bookings/${id}`, updates);
+    return response.data.data;
+}
+
+export async function deleteBooking(id) {
+    const response = await api.delete(`/bookings/${id}`);
+    return response.data;
+}
+
+export async function createBooking({ packageId, name, phone, seatsBooked, paymentProof }) {
+    const formData = new FormData();
+    formData.append("packageId", packageId);
+    formData.append("name", name);
+    formData.append("phone", phone);
+    seatsBooked.forEach((seat) => formData.append("seatsBooked", seat));
+
+    if (paymentProof) {
+        formData.append("paymentProof", paymentProof);
+    }
+
+    const response = await api.post("/bookings", formData, {
+        headers: {
+            "Content-Type": "multipart/form-data",
+        },
+    });
+
+    return response.data.data;
+}
+
+export async function getSeatStatus(packageId) {
+    const response = await api.get(`/bookings/seats/${packageId}`);
+    return response.data.data;
+}
+
+export async function createQuery(payload) {
+    const response = await api.post("/query", payload);
     return response.data.data;
 }
 

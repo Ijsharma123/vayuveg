@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import SeatLayout from "../components/SeatLayout.jsx";
 import { createBooking, getApiErrorMessage, getPackageById } from "../services/api";
@@ -13,6 +13,9 @@ export default function PackageDetails() {
     const [travelPackage, setTravelPackage] = useState(null);
     const [selectedSeats, setSelectedSeats] = useState([]);
     const [formState, setFormState] = useState(initialFormState);
+    const [paymentProof, setPaymentProof] = useState(null);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const fileInputRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
@@ -47,7 +50,11 @@ export default function PackageDetails() {
     }, [id]);
 
     function handleSeatToggle(seatNumber) {
-        if (!travelPackage || travelPackage.bookedSeats.includes(seatNumber)) {
+        if (!travelPackage) {
+            return;
+        }
+
+        if (travelPackage.bookedSeats.includes(seatNumber) || travelPackage.pendingSeats.includes(seatNumber)) {
             return;
         }
 
@@ -69,18 +76,52 @@ export default function PackageDetails() {
         }));
     }
 
+    function handlePaymentProofChange(event) {
+        setPaymentProof(event.target.files?.[0] || null);
+    }
+
+    useEffect(() => {
+        if (showPaymentModal) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "";
+        }
+
+        return () => {
+            document.body.style.overflow = "";
+        };
+    }, [showPaymentModal]);
+
     async function refreshPackage() {
         const packageDetails = await getPackageById(id);
         setTravelPackage(packageDetails);
     }
 
-    async function handleSubmit(event) {
+    function openBookingModal(event) {
         event.preventDefault();
         setErrorMessage("");
         setSuccessState(null);
 
         if (selectedSeats.length === 0) {
             setErrorMessage("Please select at least one seat before booking.");
+            return;
+        }
+
+        setShowPaymentModal(true);
+    }
+
+    function closePaymentModal() {
+        setShowPaymentModal(false);
+        setPaymentProof(null);
+        setErrorMessage("");
+    }
+
+    async function confirmBooking(event) {
+        event.preventDefault();
+        setErrorMessage("");
+
+        if (!paymentProof) {
+            setErrorMessage("Please upload payment proof before submitting your booking.");
             return;
         }
 
@@ -92,18 +133,16 @@ export default function PackageDetails() {
                 name: formState.name,
                 phone: formState.phone,
                 seatsBooked: selectedSeats,
+                paymentProof,
             });
 
             setTravelPackage(response.package);
             setSelectedSeats([]);
+            setPaymentProof(null);
+            setShowPaymentModal(false);
             setSuccessState(response);
-
-            if (response.whatsappUrl) {
-                window.open(response.whatsappUrl, "_blank", "noopener,noreferrer");
-            }
         } catch (error) {
             setErrorMessage(getApiErrorMessage(error, "Booking could not be completed."));
-
             if (error.response?.status === 409) {
                 await refreshPackage();
                 setSelectedSeats([]);
@@ -170,8 +209,8 @@ export default function PackageDetails() {
             {errorMessage ? <div className="card helper-card helper-card--error">{errorMessage}</div> : null}
             {successState ? (
                 <div className="card helper-card helper-card--success">
-                    Booking successful for seats {successState.booking.seatsBooked.join(", ")}. WhatsApp has been
-                    opened with your pre-filled booking message.
+                    Booking request submitted for seats {successState.booking.seatsBooked.join(", ")}. Your booking reference is{' '}
+                    <strong>{successState.booking.referenceId}</strong>. Seats are reserved while approval is pending.
                 </div>
             ) : null}
 
@@ -179,6 +218,7 @@ export default function PackageDetails() {
                 <SeatLayout
                     totalSeats={travelPackage.totalSeats}
                     bookedSeats={travelPackage.bookedSeats}
+                    pendingSeats={travelPackage.pendingSeats}
                     selectedSeats={selectedSeats}
                     onToggleSeat={handleSeatToggle}
                 />
@@ -204,7 +244,7 @@ export default function PackageDetails() {
                         </div>
                     </div>
 
-                    <form className="stack-form" onSubmit={handleSubmit}>
+                    <form className="stack-form" onSubmit={openBookingModal}>
                         <label>
                             <span>Name</span>
                             <input
@@ -229,12 +269,63 @@ export default function PackageDetails() {
                             />
                         </label>
 
-                        <button className="button" type="submit" disabled={isSubmitting}>
+                        <button className="button" type="submit" disabled={isSubmitting || selectedSeats.length === 0}>
                             {isSubmitting ? "Booking seats..." : "Book Now"}
                         </button>
                     </form>
                 </aside>
             </div>
+
+            {showPaymentModal ? (
+                <section className="modal-overlay" onClick={closePaymentModal}>
+                    <div className="modal card" onClick={(event) => event.stopPropagation()}>
+                        <button className="modal__close" type="button" onClick={closePaymentModal}>
+                            Close
+                        </button>
+                        <h2>Upload payment proof</h2>
+                        <p>Scan the QR code below in your payment app and upload the payment screenshot.</p>
+
+                        <div className="qr-placeholder">
+                            <div className="qr-placeholder__box">
+                                <img
+                                    src="/packages/payment-qr.jpg"
+                                    alt="Payment QR code"
+                                    className="qr-placeholder__image"
+                                />
+                            </div>
+                        </div>
+
+                        <form className="stack-form" onSubmit={confirmBooking}>
+                            <div className="file-upload">
+                                <span className="file-upload__label">Payment proof</span>
+                                <div className="file-upload__control">
+                                    <button
+                                        type="button"
+                                        className="button button--ghost"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        Choose file
+                                    </button>
+                                    <span className="file-upload__name">
+                                        {paymentProof ? paymentProof.name : "No file chosen"}
+                                    </span>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handlePaymentProofChange}
+                                        style={{ display: "none" }}
+                                    />
+                                </div>
+                            </div>
+
+                            <button className="button" type="submit" disabled={isSubmitting || !paymentProof}>
+                                {isSubmitting ? "Submitting booking..." : "Confirm Payment and Book"}
+                            </button>
+                        </form>
+                    </div>
+                </section>
+            ) : null}
         </section>
     );
 }

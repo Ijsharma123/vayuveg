@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar.jsx";
-import FloatingWhatsApp from "./components/FloatingWhatsApp.jsx";
 import Home from "./pages/Home.jsx";
 import Packages from "./pages/Packages.jsx";
 import PackageDetails from "./pages/PackageDetails.jsx";
 import Inquiry from "./pages/Inquiry.jsx";
 import Admin from "./pages/Admin.jsx";
+import AdminDashboard from "./pages/AdminDashboard.jsx";
 
 function ScrollToTop() {
     const location = useLocation();
@@ -46,7 +46,6 @@ export default function App() {
                         <Route path="*" element={<NotFound />} />
                     </Routes>
                 </main>
-                <FloatingWhatsApp />
             </div>
         </BrowserRouter>
     );

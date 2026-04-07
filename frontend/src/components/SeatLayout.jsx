@@ -8,7 +8,7 @@ function buildRows(totalSeats) {
     return rows;
 }
 
-export default function SeatLayout({ totalSeats, bookedSeats, selectedSeats, onToggleSeat }) {
+export default function SeatLayout({ totalSeats, bookedSeats = [], pendingSeats = [], selectedSeats, onToggleSeat }) {
     const rows = buildRows(totalSeats);
 
     return (
@@ -28,8 +28,12 @@ export default function SeatLayout({ totalSeats, bookedSeats, selectedSeats, onT
                         Selected
                     </span>
                     <span className="seat-legend__item">
-                        <span className="seat-legend__swatch seat-legend__swatch--booked" />
-                        Booked
+                        <span className="seat-legend__swatch seat-legend__swatch--pending" />
+                        Pending
+                    </span>
+                    <span className="seat-legend__item">
+                        <span className="seat-legend__swatch seat-legend__swatch--approved" />
+                        Approved
                     </span>
                 </div>
             </div>
@@ -40,16 +44,18 @@ export default function SeatLayout({ totalSeats, bookedSeats, selectedSeats, onT
                 {rows.map((row, rowIndex) => (
                     <div className="seat-row" key={`row-${rowIndex + 1}`}>
                         {row.slice(0, 2).map((seatNumber) => {
-                            const isBooked = bookedSeats.includes(seatNumber);
+                            const isApproved = bookedSeats.includes(seatNumber);
+                            const isPending = pendingSeats.includes(seatNumber);
                             const isSelected = selectedSeats.includes(seatNumber);
+                            const seatState = isApproved ? "approved" : isPending ? "pending" : isSelected ? "selected" : "available";
 
                             return (
                                 <button
                                     key={seatNumber}
                                     type="button"
-                                    className={`seat seat--${isBooked ? "booked" : isSelected ? "selected" : "available"}`}
+                                    className={`seat seat--${seatState}`}
                                     onClick={() => onToggleSeat(seatNumber)}
-                                    disabled={isBooked}
+                                    disabled={isApproved || isPending}
                                 >
                                     {seatNumber}
                                 </button>
@@ -59,16 +65,18 @@ export default function SeatLayout({ totalSeats, bookedSeats, selectedSeats, onT
                         <div className="seat-aisle">Aisle</div>
 
                         {row.slice(2).map((seatNumber) => {
-                            const isBooked = bookedSeats.includes(seatNumber);
+                            const isApproved = bookedSeats.includes(seatNumber);
+                            const isPending = pendingSeats.includes(seatNumber);
                             const isSelected = selectedSeats.includes(seatNumber);
+                            const seatState = isApproved ? "approved" : isPending ? "pending" : isSelected ? "selected" : "available";
 
                             return (
                                 <button
                                     key={seatNumber}
                                     type="button"
-                                    className={`seat seat--${isBooked ? "booked" : isSelected ? "selected" : "available"}`}
+                                    className={`seat seat--${seatState}`}
                                     onClick={() => onToggleSeat(seatNumber)}
-                                    disabled={isBooked}
+                                    disabled={isApproved || isPending}
                                 >
                                     {seatNumber}
                                 </button>

@@ -1,19 +1,31 @@
+const path = require("path");
 const Booking = require("../models/Booking");
 const Package = require("../models/Package");
-const buildWhatsAppUrl = require("../utils/buildWhatsAppUrl");
 
 function normalizeSeats(seats) {
     return Array.from(
         new Set(
             (Array.isArray(seats) ? seats : [])
                 .map((seat) => Number(seat))
-                .filter((seat) => Number.isInteger(seat))
+                .filter((seat) => Number.isInteger(seat) && seat > 0)
         )
     ).sort((firstSeat, secondSeat) => firstSeat - secondSeat);
 }
 
 function normalizePhone(phone) {
     return String(phone || "").replace(/\D/g, "");
+}
+
+function buildReferenceId() {
+    return `VBG-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+}
+
+function buildFileUrl(req, filePath) {
+    if (!filePath) {
+        return "";
+    }
+    const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, "/");
+    return `${req.protocol}://${req.get("host")}/${relativePath}`;
 }
 
 function serializePackage(travelPackage) {
@@ -27,7 +39,8 @@ function serializePackage(travelPackage) {
         duration: payload.duration,
         totalSeats: payload.totalSeats,
         availableSeats: payload.availableSeats,
-        bookedSeats: (payload.bookedSeats || []).sort((firstSeat, secondSeat) => firstSeat - secondSeat),
+        bookedSeats: (payload.bookedSeats || []).sort((a, b) => a - b),
+        pendingSeats: (payload.pendingSeats || []).sort((a, b) => a - b),
         image: payload.image,
         description: payload.description,
         createdAt: payload.createdAt,
@@ -35,9 +48,27 @@ function serializePackage(travelPackage) {
     };
 }
 
-exports.bookSeats = async (req, res, next) => {
+function serializeBooking(booking) {
+    return {
+        id: booking._id,
+        packageId: booking.packageId,
+        packageTitle: booking.packageTitle,
+        name: booking.name,
+        phone: booking.phone,
+        seatsBooked: booking.seatsBooked,
+        status: booking.status,
+        paymentProof: booking.paymentProof,
+        bookingTime: booking.bookingTime,
+        referenceId: booking.referenceId,
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt,
+    };
+}
+
+exports.createBooking = async (req, res, next) => {
     const { packageId, name, phone, seatsBooked } = req.body;
     const normalizedSeats = normalizeSeats(seatsBooked);
+    const sanitizedPhone = normalizePhone(phone);
 
     if (!packageId || !name || !phone || normalizedSeats.length === 0) {
         return res.status(400).json({
@@ -45,7 +76,6 @@ exports.bookSeats = async (req, res, next) => {
             message: "Package, customer name, phone number and selected seats are required.",
         });
     }
-    const sanitizedPhone = normalizePhone(phone);
 
     if (sanitizedPhone.length < 10) {
         return res.status(400).json({
@@ -56,7 +86,7 @@ exports.bookSeats = async (req, res, next) => {
 
     try {
         const travelPackage = await Package.findById(packageId).select(
-            "title destination pricePerSeat duration totalSeats availableSeats image description bookedSeats"
+            "title destination pricePerSeat duration totalSeats availableSeats image description bookedSeats pendingSeats"
         );
 
         if (!travelPackage) {
@@ -65,10 +95,10 @@ exports.bookSeats = async (req, res, next) => {
                 message: "Travel package not found.",
             });
         }
+
         const invalidSeats = normalizedSeats.filter(
             (seatNumber) => seatNumber < 1 || seatNumber > travelPackage.totalSeats
         );
-
         if (invalidSeats.length > 0) {
             return res.status(400).json({
                 success: false,
@@ -76,34 +106,38 @@ exports.bookSeats = async (req, res, next) => {
             });
         }
 
+        const blockedSeats = new Set([...(travelPackage.bookedSeats || []), ...(travelPackage.pendingSeats || [])]);
+        const unavailableSeats = normalizedSeats.filter((seat) => blockedSeats.has(seat));
+
+        if (unavailableSeats.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: `Selected seats are no longer available: ${unavailableSeats.join(", ")}.`,
+            });
+        }
+
         const updatedPackage = await Package.findOneAndUpdate(
             {
                 _id: packageId,
-                availableSeats: { $gte: normalizedSeats.length },
                 bookedSeats: { $nin: normalizedSeats },
+                pendingSeats: { $nin: normalizedSeats },
+                availableSeats: { $gte: normalizedSeats.length },
             },
             {
-                $push: { bookedSeats: { $each: normalizedSeats } },
+                $push: { pendingSeats: { $each: normalizedSeats } },
                 $inc: { availableSeats: -normalizedSeats.length },
             },
-            {
-                new: true,
-            }
+            { new: true }
         );
 
         if (!updatedPackage) {
             return res.status(409).json({
                 success: false,
-                message: "Some selected seats were just booked. Please refresh and choose available seats.",
+                message: "Some selected seats were just reserved by another customer. Please refresh and choose available seats.",
             });
         }
 
-        // const whatsappUrl = buildWhatsAppUrl({
-        //     phoneNumber: process.env.WHATSAPP_NUMBER,
-        //     packageName: travelPackage.title,
-        //     seats: normalizedSeats,
-        //     customerName: name.trim(),
-        // });
+        const fileUrl = req.file ? buildFileUrl(req, req.file.path) : "";
 
         try {
             const booking = await Booking.create({
@@ -112,37 +146,26 @@ exports.bookSeats = async (req, res, next) => {
                 name: name.trim(),
                 phone: sanitizedPhone,
                 seatsBooked: normalizedSeats,
-                paymentProof: req.file ? `${"http://localhost:5000"}${req.file.path.replace(/\\/g, '/')}` : '',
                 status: "pending",
-                // whatsappUrl,
+                paymentProof: fileUrl,
+                bookingTime: new Date(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                referenceId: buildReferenceId(),
             });
 
             return res.status(201).json({
                 success: true,
-                message: "Request submitted. You will get confirmation within 24 hours.",
+                message: "Your booking request is pending approval. Seats are temporarily reserved for 24 hours.",
                 data: {
-                    booking: {
-                        id: booking._id,
-                        packageId: booking.packageId,
-                        packageTitle: booking.packageTitle,
-                        name: booking.name,
-                        phone: booking.phone,
-                        seatsBooked: booking.seatsBooked,
-                        createdAt: booking.createdAt,
-                    },
+                    booking: serializeBooking(booking),
                     package: serializePackage(updatedPackage),
-                    // whatsappUrl,
                 },
             });
         } catch (bookingError) {
-            await Package.updateOne(
-                { _id: packageId },
-                {
-                    $pullAll: { bookedSeats: normalizedSeats },
-                    $inc: { availableSeats: normalizedSeats.length },
-                }
-            );
-
+            await Package.findByIdAndUpdate(packageId, {
+                $pullAll: { pendingSeats: normalizedSeats },
+                $inc: { availableSeats: normalizedSeats.length },
+            });
             throw bookingError;
         }
     } catch (error) {
@@ -150,53 +173,225 @@ exports.bookSeats = async (req, res, next) => {
     }
 };
 
-
-const approveBooking = async (req, res) => {
+exports.getSeatStatus = async (req, res, next) => {
     try {
-        const { bookingId } = req.body;
+        const { packageId } = req.params;
 
-        const booking = await Booking.findById(bookingId);
-        if (!booking) {
-            return res.status(404).json({ message: "Booking not found" });
+        const travelPackage = await Package.findById(packageId).select("bookedSeats pendingSeats");
+        if (!travelPackage) {
+            return res.status(404).json({
+                success: false,
+                message: "Travel package not found.",
+            });
         }
 
-        if (booking.status !== "pending") {
-            return res.status(400).json({ message: "Already processed" });
-        }
+        return res.status(200).json({
+            success: true,
+            data: {
+                bookedSeats: (travelPackage.bookedSeats || []).sort((a, b) => a - b),
+                pendingSeats: (travelPackage.pendingSeats || []).sort((a, b) => a - b),
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
-        const travelPackage = await Package.findById(booking.packageId);
-
-        // ✅ Atomic seat booking
+async function processBookingStatusChange(booking, status) {
+    if (status === "approved") {
         const updatedPackage = await Package.findOneAndUpdate(
             {
                 _id: booking.packageId,
-                bookedSeats: { $nin: booking.seatsRequested }
+                bookedSeats: { $nin: booking.seatsBooked },
             },
             {
-                $push: { bookedSeats: { $each: booking.seatsRequested } },
-                $inc: { availableSeats: -booking.seatsRequested.length }
+                $pullAll: { pendingSeats: booking.seatsBooked },
+                $push: { bookedSeats: { $each: booking.seatsBooked } },
             },
             { new: true }
         );
 
         if (!updatedPackage) {
             booking.status = "rejected";
+            booking.rejectionReason = "approval_conflict";
+            booking.processedAt = new Date();
             await booking.save();
+            return null;
+        }
+    } else if (status === "rejected") {
+        await Package.findByIdAndUpdate(booking.packageId, {
+            $pullAll: { pendingSeats: booking.seatsBooked },
+            $inc: { availableSeats: booking.seatsBooked.length },
+        });
+    }
 
-            return res.status(409).json({
-                message: "Seats already taken. Booking rejected."
+    booking.status = status;
+    booking.rejectionReason = status === "rejected" ? "admin_rejected" : undefined;
+    booking.processedAt = new Date();
+    await booking.save();
+    return booking;
+}
+
+exports.getBookings = async (req, res, next) => {
+    try {
+        const { status } = req.query;
+        const query = {};
+
+        if (status && ["pending", "approved", "rejected"].includes(status)) {
+            query.status = status;
+        }
+
+        const bookings = await Booking.find(query).sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            data: bookings,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.updateBookingStatus = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!["approved", "rejected"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Status must be approved or rejected.",
             });
         }
 
-        booking.status = "approved";
-        await booking.save();
+        const booking = await Booking.findById(id);
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found.",
+            });
+        }
 
-        return res.json({
-            message: "Booking approved",
-            booking
+        if (booking.status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "Only pending bookings can be approved or rejected.",
+            });
+        }
+
+        const updatedBooking = await processBookingStatusChange(booking, status);
+        if (!updatedBooking) {
+            return res.status(409).json({
+                success: false,
+                message: "Cannot approve booking because seats were already reserved.",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Booking ${status} successfully.`,
+            data: updatedBooking,
         });
-
     } catch (error) {
-        res.status(500).json({ message: "Approval failed", error: error.message });
+        next(error);
     }
 };
+
+exports.updateBooking = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { name, phone, status } = req.body;
+
+        const booking = await Booking.findById(id);
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found.",
+            });
+        }
+
+        if (name) {
+            booking.name = String(name).trim();
+        }
+
+        if (phone) {
+            booking.phone = String(phone).trim();
+        }
+
+        if (status) {
+            if (!["approved", "rejected"].includes(status)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Status must be approved or rejected.",
+                });
+            }
+
+            if (booking.status !== "pending") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Only pending bookings can be updated with a status change.",
+                });
+            }
+
+            const updatedBooking = await processBookingStatusChange(booking, status);
+            if (!updatedBooking) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Cannot approve booking because seats were already reserved.",
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: "Booking updated successfully.",
+                data: updatedBooking,
+            });
+        }
+
+        await booking.save();
+        return res.status(200).json({
+            success: true,
+            message: "Booking updated successfully.",
+            data: booking,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.deleteBooking = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const booking = await Booking.findById(id);
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found.",
+            });
+        }
+
+        if (booking.status === "pending") {
+            await Package.findByIdAndUpdate(booking.packageId, {
+                $pullAll: { pendingSeats: booking.seatsBooked },
+                $inc: { availableSeats: booking.seatsBooked.length },
+            });
+        }
+
+        if (booking.status === "approved") {
+            await Package.findByIdAndUpdate(booking.packageId, {
+                $pullAll: { bookedSeats: booking.seatsBooked },
+                $inc: { availableSeats: booking.seatsBooked.length },
+            });
+        }
+
+        await booking.deleteOne();
+
+        return res.status(200).json({
+            success: true,
+            message: "Booking deleted successfully.",
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+

@@ -33,13 +33,32 @@ const BookingSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: ["pending", "approved", "rejected"],
-            default: "pending"
+            default: "pending",
         },
-
-        paymentProof: String, // screenshot (optional)
-        whatsappUrl: {
+        paymentProof: {
             type: String,
             trim: true,
+        },
+        bookingTime: {
+            type: Date,
+            default: Date.now,
+        },
+        expiresAt: {
+            type: Date,
+            default: () => new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        referenceId: {
+            type: String,
+            required: true,
+            unique: true,
+            trim: true,
+        },
+        rejectionReason: {
+            type: String,
+            trim: true,
+        },
+        processedAt: {
+            type: Date,
         },
     },
     {

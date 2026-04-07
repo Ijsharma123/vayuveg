@@ -44,7 +44,7 @@ export default function Home() {
                     <h1>Vayuveg Bus Travels</h1>
                     <p>
                         Comfortable and Affordable Bus Journeys with modern seat booking, curated travel
-                        packages and quick WhatsApp support for every trip.
+                        packages and fast customer support for every trip.
                     </p>
 
                     <div className="hero-actions">
@@ -66,7 +66,7 @@ export default function Home() {
                             <span>Seat availability</span>
                         </div>
                         <div className="stats-strip__item">
-                            <strong>WhatsApp</strong>
+                            <strong>Support</strong>
                             <span>Booking follow-up</span>
                         </div>
                     </div>
@@ -120,8 +120,8 @@ export default function Home() {
                         <p>Browse packages, compare pricing and confirm journeys comfortably on mobile or desktop.</p>
                     </article>
                     <article className="card info-card">
-                        <h3>Fast WhatsApp support</h3>
-                        <p>Bookings and inquiries flow directly into WhatsApp so follow-up feels quick and familiar.</p>
+                        <h3>Fast support</h3>
+                        <p>Bookings and inquiries are handled quickly so follow-up feels fast and reliable.</p>
                     </article>
                 </div>
             </section>

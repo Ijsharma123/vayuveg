@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createWhatsAppUrl } from "../services/whatsapp";
+import { createQuery, getApiErrorMessage } from "../services/api";
 
 const initialInquiry = {
     name: "",
@@ -10,7 +10,8 @@ const initialInquiry = {
 
 export default function Inquiry() {
     const [inquiry, setInquiry] = useState(initialInquiry);
-    const [hasSubmitted, setHasSubmitted] = useState(false);
+    const [statusMessage, setStatusMessage] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
 
     function handleChange(event) {
         const { name, value } = event.target;
@@ -21,13 +22,18 @@ export default function Inquiry() {
         }));
     }
 
-    function handleSubmit(event) {
+    async function handleSubmit(event) {
         event.preventDefault();
+        setStatusMessage("");
+        setErrorMessage("");
 
-        const whatsappMessage = `Hello, I have an inquiry for ${inquiry.destination}. Name: ${inquiry.name}. Phone: ${inquiry.phone}. Message: ${inquiry.message}`;
-
-        window.open(createWhatsAppUrl(whatsappMessage), "_blank", "noopener,noreferrer");
-        setHasSubmitted(true);
+        try {
+            await createQuery(inquiry);
+            setStatusMessage("Your inquiry has been submitted. Our team will get back to you soon.");
+            setInquiry(initialInquiry);
+        } catch (error) {
+            setErrorMessage(getApiErrorMessage(error, "Unable to submit your inquiry right now."));
+        }
     }
 
     return (
@@ -35,16 +41,16 @@ export default function Inquiry() {
             <div className="split-panel">
                 <div className="card inquiry-copy">
                     <span className="eyebrow">Travel inquiry</span>
-                    <h1>Plan your journey over WhatsApp</h1>
+                    <h1>Send your travel plan request</h1>
                     <p>
-                        Share your preferred destination, travel dates or any special request and continue the
-                        conversation instantly on WhatsApp.
+                        Share your preferred destination, travel dates or any special request and our team will review
+                        it promptly.
                     </p>
 
                     <div className="info-grid info-grid--single">
                         <article className="info-card card">
-                            <h3>Quick support</h3>
-                            <p>Useful for custom groups, family trips and package clarifications before booking.</p>
+                            <h3>Quick response</h3>
+                            <p>Our travel support team reviews inquiries and responds to you directly.</p>
                         </article>
                     </div>
                 </div>
@@ -85,12 +91,11 @@ export default function Inquiry() {
                     </label>
 
                     <button className="button" type="submit">
-                        Continue on WhatsApp
+                        Submit Inquiry
                     </button>
 
-                    {hasSubmitted ? (
-                        <p className="inline-success">Your inquiry message is ready in WhatsApp.</p>
-                    ) : null}
+                    {statusMessage ? <p className="inline-success">{statusMessage}</p> : null}
+                    {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
                 </form>
             </div>
         </section>
