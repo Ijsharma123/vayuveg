@@ -83,17 +83,17 @@ app.use((error, req, res, next) => {
     });
 });
 
-async function startServer() {
-    await connectDatabase();
-    await seedAdminUser();
-    await seedPackages();
-    await seedTermsAndConditions();
-    startBookingExpiryWorker();
+// async function startServer() {
+//     await connectDatabase();
+//     await seedAdminUser();
+//     await seedPackages();
+//     await seedTermsAndConditions();
+//     startBookingExpiryWorker();
 
-    app.listen(travelPort, () => {
-        console.log(`Vayuveg Bus Travels backend running on http://localhost:${travelPort}`);
-    });
-}
+    // app.listen(travelPort, () => {
+    //     console.log(`Vayuveg Bus Travels backend running on http://localhost:${travelPort}`);
+    // });
+// }
 
 startServer().catch((error) => {
     console.error("Failed to start Vayuveg backend:", error);
