@@ -43,6 +43,7 @@ export default function App() {
                         <Route path="/packages/:id" element={<PackageDetails />} />
                         <Route path="/inquiry" element={<Inquiry />} />
                         <Route path="/admin" element={<Admin />} />
+                        <Route path="/admin/dashboard" element={<AdminDashboard />} />
                         <Route path="*" element={<NotFound />} />
                     </Routes>
                 </main>

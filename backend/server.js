@@ -12,8 +12,10 @@ const packageRoutes = require("./routes/packageRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const queryRoutes = require("./routes/queryRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const termsRoutes = require("./routes/termsRoutes");
 const seedPackages = require("./data/seedPackages");
 const seedAdminUser = require("./data/seedAdmin");
+const seedTermsAndConditions = require("./data/seedTerms");
 const { startBookingExpiryWorker } = require("./cron/bookingExpiry");
 
 const app = express();
@@ -48,6 +50,7 @@ app.use("/api", packageRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api", queryRoutes);
 app.use("/api", adminRoutes);
+app.use("/api", termsRoutes);
 
 if (fs.existsSync(frontendDistPath)) {
     app.use(express.static(frontendDistPath));
@@ -84,6 +87,7 @@ async function startServer() {
     await connectDatabase();
     await seedAdminUser();
     await seedPackages();
+    await seedTermsAndConditions();
     startBookingExpiryWorker();
 
     app.listen(travelPort, () => {

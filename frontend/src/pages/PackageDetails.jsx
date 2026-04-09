@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import SeatLayout from "../components/SeatLayout.jsx";
-import { createBooking, getApiErrorMessage, getPackageById } from "../services/api";
+import { createBooking, getApiErrorMessage, getPackageById, getTermsAndConditions } from "../services/api";
 
 const initialFormState = {
     name: "",
@@ -14,6 +14,8 @@ export default function PackageDetails() {
     const [selectedSeats, setSelectedSeats] = useState([]);
     const [formState, setFormState] = useState(initialFormState);
     const [paymentProof, setPaymentProof] = useState(null);
+    const [agreeToTerms, setAgreeToTerms] = useState(false);
+    const [termsAndConditions, setTermsAndConditions] = useState([]);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const fileInputRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -27,9 +29,13 @@ export default function PackageDetails() {
         async function loadPackage() {
             try {
                 const packageDetails = await getPackageById(id);
+                const termsData = await getTermsAndConditions();
+                
+                console.log("Loaded terms data:", termsData);
 
                 if (!ignore) {
                     setTravelPackage(packageDetails);
+                    setTermsAndConditions(termsData?.points || []);
                 }
             } catch (error) {
                 if (!ignore) {
@@ -113,6 +119,7 @@ export default function PackageDetails() {
     function closePaymentModal() {
         setShowPaymentModal(false);
         setPaymentProof(null);
+        setAgreeToTerms(false);
         setErrorMessage("");
     }
 
@@ -122,6 +129,11 @@ export default function PackageDetails() {
 
         if (!paymentProof) {
             setErrorMessage("Please upload payment proof before submitting your booking.");
+            return;
+        }
+
+        if (!agreeToTerms) {
+            setErrorMessage("Please agree to the terms and conditions before booking.");
             return;
         }
 
@@ -288,7 +300,7 @@ export default function PackageDetails() {
                         <div className="qr-placeholder">
                             <div className="qr-placeholder__box">
                                 <img
-                                    src="/packages/payment-qr.jpg"
+                                    src="/payment-qr.jpg"
                                     alt="Payment QR code"
                                     className="qr-placeholder__image"
                                 />
@@ -319,7 +331,36 @@ export default function PackageDetails() {
                                 </div>
                             </div>
 
-                            <button className="button" type="submit" disabled={isSubmitting || !paymentProof}>
+                            <div className="terms-section">
+                                <div className="terms-header">
+                                    <span className="eyebrow">Terms and Conditions</span>
+                                    <h3>Booking Agreement ({termsAndConditions.length} items)</h3>
+                                </div>
+                                
+                                <div className="terms-content">
+                                    {console.log("Terms rendering, length:", termsAndConditions.length, "data:", termsAndConditions)}
+                                    <ul className="terms-list">
+                                        {termsAndConditions.length > 0 ? (
+                                            termsAndConditions.map((term) => (
+                                                <li key={term.id}>{term.text}</li>
+                                            ))
+                                        ) : (
+                                            <li>No terms and conditions available</li>
+                                        )}
+                                    </ul>
+                                </div>
+
+                                <label className="terms-agreement">
+                                    <input
+                                        type="checkbox"
+                                        checked={agreeToTerms}
+                                        onChange={(e) => setAgreeToTerms(e.target.checked)}
+                                    />
+                                    <span>I agree to the terms and conditions</span>
+                                </label>
+                            </div>
+
+                            <button className="button" type="submit" disabled={isSubmitting || !paymentProof || !agreeToTerms}>
                                 {isSubmitting ? "Submitting booking..." : "Confirm Payment and Book"}
                             </button>
                         </form>

@@ -18,7 +18,32 @@ const seatValidator = [
     body("packageId").trim().notEmpty().withMessage("Package ID is required."),
     body("name").trim().notEmpty().withMessage("Name is required."),
     body("phone").trim().notEmpty().withMessage("Phone number is required."),
-    body("seatsBooked").isArray({ min: 1 }).withMessage("At least one seat must be selected."),
+    body("seatsBooked")
+        .custom((value) => {
+            if (!value) {
+                return false;
+            }
+
+            if (Array.isArray(value)) {
+                return value.length > 0;
+            }
+
+            if (typeof value === "string") {
+                if (value.trim().length === 0) {
+                    return false;
+                }
+
+                try {
+                    const parsed = JSON.parse(value);
+                    return Array.isArray(parsed) && parsed.length > 0;
+                } catch {
+                    return true;
+                }
+            }
+
+            return false;
+        })
+        .withMessage("At least one seat must be selected."),
 ];
 
 router.post("/book", upload.single("paymentProof"), seatValidator, validateRequest, createBooking);

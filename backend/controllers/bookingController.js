@@ -3,9 +3,26 @@ const Booking = require("../models/Booking");
 const Package = require("../models/Package");
 
 function normalizeSeats(seats) {
+    let seatList = [];
+
+    if (Array.isArray(seats)) {
+        seatList = seats;
+    } else if (typeof seats === "string") {
+        try {
+            const parsed = JSON.parse(seats);
+            if (Array.isArray(parsed)) {
+                seatList = parsed;
+            } else {
+                seatList = [seats];
+            }
+        } catch {
+            seatList = [seats];
+        }
+    }
+
     return Array.from(
         new Set(
-            (Array.isArray(seats) ? seats : [])
+            seatList
                 .map((seat) => Number(seat))
                 .filter((seat) => Number.isInteger(seat) && seat > 0)
         )

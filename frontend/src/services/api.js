@@ -64,7 +64,7 @@ export async function createBooking({ packageId, name, phone, seatsBooked, payme
     formData.append("packageId", packageId);
     formData.append("name", name);
     formData.append("phone", phone);
-    seatsBooked.forEach((seat) => formData.append("seatsBooked", seat));
+    formData.append("seatsBooked", JSON.stringify(seatsBooked));
 
     if (paymentProof) {
         formData.append("paymentProof", paymentProof);
@@ -76,6 +76,35 @@ export async function createBooking({ packageId, name, phone, seatsBooked, payme
         },
     });
 
+    return response.data.data;
+}
+
+export async function getQueries(status) {
+    const queryString = status ? `?status=${encodeURIComponent(status)}` : "";
+    const response = await api.get(`/query${queryString}`);
+    return response.data.data;
+}
+
+export async function updateQueryStatus(id, status) {
+    const response = await api.put(`/query/${id}`, { status });
+    return response.data.data;
+}
+
+export async function getTermsAndConditions() {
+    try {
+        const response = await api.get("/terms");
+        console.log("Raw T&C response:", response);
+        // Response structure: { success: true, data: { _id, points: [...], ... } }
+        const termsDoc = response.data.data;
+        return termsDoc || { points: [] };
+    } catch (error) {
+        console.error("Failed to load T&C:", error);
+        return { points: [] };
+    }
+}
+
+export async function updateTermsAndConditions(points) {
+    const response = await api.put("/terms", { points });
     return response.data.data;
 }
 
